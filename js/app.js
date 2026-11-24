@@ -237,7 +237,8 @@
       '<a href="#/" class="' + (active === "home" ? "on" : "") + '">🏠 О программе</a>' +
       (ME && !ME.offline ? '<a href="#/class" class="' + (active === "class" ? "on" : "") + '">👥 Ученики и группы</a>' : "") +
       '<a href="#/words" class="' + (active === "words" ? "on" : "") + '">📚 Все слова (' + ALL_WORDS.length + ")</a>" +
-      '<a href="#/rules" class="' + (active === "rules" ? "on" : "") + '">📘 Все правила</a></div><div class="nav">';
+      '<a href="#/rules" class="' + (active === "rules" ? "on" : "") + '">📘 Все правила</a>' +
+      '<a href="#/help" class="' + (active === "help" ? "on" : "") + '">❓ Инструкция</a></div><div class="nav">';
     var mod = 0;
     SESSIONS.forEach(function (s) {
       if (s.module !== mod) { mod = s.module; h += '<div class="mod-title">Модуль ' + mod + "</div>"; }
@@ -348,6 +349,24 @@
       }).join("");
   }
 
+  // ---------------------------------------------------------------- help
+  function viewHelp() {
+    var H = window.HELP || { teacher: [], student: [], changes: [] };
+    var role = isStudent() ? "student" : "teacher";
+    var secs = H[role] || [];
+    var h = "<h1>Инструкция</h1><p class=\"sub\">" + (role === "student" ? "Как заниматься на сайте: уроки, тренировки и повторение." : "Как работать с сайтом: программа уроков, слова, ученики и группы.") + "</p>" +
+      '<div class="card help-toc">' + secs.map(function (s, i) { return '<button type="button" class="help-link" data-help-jump="help-' + i + '">' + esc(s.t) + "</button>"; }).join("") +
+      '<button type="button" class="help-link" data-help-jump="help-new">Что нового</button></div>';
+    secs.forEach(function (s, i) {
+      h += '<div class="card help-sec" id="help-' + i + '"><h2>' + esc(s.t) + '</h2><ul class="hw-list">' +
+        s.items.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</ul></div>";
+    });
+    var ch = (H.changes || []).filter(function (c) { return c.who === "all" || c.who === role; });
+    if (ch.length) h += '<div class="card help-sec" id="help-new"><h2>Что нового</h2><ul class="hw-list">' +
+      ch.map(function (c) { return '<li><span class="muted">' + esc(c.d.split("-").reverse().join(".")) + "</span> — " + esc(c.t) + "</li>"; }).join("") + "</ul></div>";
+    return h;
+  }
+
   // ---------------------------------------------------------------- quiz
   var quiz = null;
   function openQuiz(words, title) {
@@ -452,7 +471,8 @@
     var h = '<div class="nav-top">' +
       '<a href="#/" class="' + (active === "home" ? "on" : "") + '">🏠 Мои уроки</a>' +
       '<a href="#/review" class="' + (active === "review" ? "on" : "") + '">🔁 Повторение' + (d.due.length ? ' <span class="badge">' + d.due.length + "</span>" : "") + "</a>" +
-      '<a href="#/mywords" class="' + (active === "mywords" ? "on" : "") + '">📚 Мой словарь</a></div><div class="nav">' +
+      '<a href="#/mywords" class="' + (active === "mywords" ? "on" : "") + '">📚 Мой словарь</a>' +
+      '<a href="#/help" class="' + (active === "help" ? "on" : "") + '">❓ Инструкция</a></div><div class="nav">' +
       '<div class="mod-title">Открытые уроки</div>';
     var list = openedSessions();
     if (!list.length) h += '<div class="muted small" style="padding:4px 10px">Учитель ещё не открыл уроки</div>';
@@ -769,11 +789,13 @@
       if (parts[0] === "l" || parts[0] === "s") { active = parseInt(parts[1], 10) || 1; html = viewStudentLesson(active); }
       else if (parts[0] === "review") { active = "review"; html = viewReview(); }
       else if (parts[0] === "mywords") { active = "mywords"; html = viewMyWords(); }
+      else if (parts[0] === "help") { active = "help"; html = viewHelp(); }
       else { active = "home"; html = viewStudentHome(); }
     } else {
       if (parts[0] === "s") { active = parseInt(parts[1], 10) || 1; html = viewSession(active); }
       else if (parts[0] === "words") { active = "words"; html = viewWords(); }
       else if (parts[0] === "rules") { active = "rules"; html = viewRules(); }
+      else if (parts[0] === "help") { active = "help"; html = viewHelp(); }
       else if (parts[0] === "class" && online()) { active = "class"; html = viewClass(parseInt(parts[1], 10) || null); }
       else { active = "home"; html = viewHome(); }
     }
@@ -795,6 +817,7 @@
   // клики кабинета (ученик / учитель); true — клик обработан
   function cabinetClick(t) {
     var d = t.dataset;
+    if (d.helpJump) { var el = document.getElementById(d.helpJump); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return true; }
     if (d.tr) { trainerAction(d.tr); return true; }
     if (d.pick) {
       var c = tr.deck[tr.i]; tr.picked = +d.pick;
@@ -877,7 +900,7 @@
 
   document.addEventListener("click", function (e) {
     var t = e.target.closest("[data-say],[data-act],[data-q],[data-timer],[data-tm],[data-jump],[data-quiz-session],[data-copy-home],#btn-slow,#btn-big,#btn-menu,#btn-print," +
-      "[data-tr],[data-pick],[data-uml],[data-train],[data-review],[data-acc],[data-open-group],[data-reset],[data-del-student],[data-del-group],[data-copy-creds],[data-hide-creds]");
+      "[data-help-jump],[data-tr],[data-pick],[data-uml],[data-train],[data-review],[data-acc],[data-open-group],[data-reset],[data-del-student],[data-del-group],[data-copy-creds],[data-hide-creds]");
     if (!t) {
       if (e.target.id === "modal" && !tr) { quiz = null; renderQuiz(); }
       return;

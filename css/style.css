@@ -221,6 +221,13 @@ table.wt td.src { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
 .lesson-chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); border-radius: 10px; padding: 8px 0; cursor: pointer; font-weight: 600; }
 .lesson-chip.on { background: var(--ok); border-color: var(--ok); color: #fff; }
 
+/* ---------- help ---------- */
+.help-toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.help-link { border: 1px solid var(--line); background: var(--surface-2); color: var(--accent); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13.5px; }
+.help-link:hover { border-color: var(--accent); }
+.help-sec { scroll-margin-top: 80px; }
+.help-sec .hw-list li { margin: 7px 0; }
+
 /* ---------- mobile ---------- */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
