@@ -1,23 +1,45 @@
-# Menschen A1.1 — программа уроков
+# Menschen A1.1 — программа уроков и кабинеты учеников
 
-Программа для учителя по рабочей тетради Menschen A1.1: 28 занятий по 90 минут
-(30 мин проверка ДЗ + 60 мин новая тема), слова с переводом на русский и таджикский
-без повторов, правила на немецком и русском, озвучка, опрос, экспорт таблиц картинкой.
+Сайт: https://ziyoda.munavarovbi.com — открывается только после входа по логину и паролю.
 
-Сайт: https://ziyoda.munavarovbi.com — статические файлы, сервер не нужен.
-Открыть локально: `index.html` двойным щелчком.
+- **Учитель** видит программу: 28 занятий по 90 минут (30 мин проверка ДЗ + 60 мин новая
+  тема), слова DE/RU/TJ без повторов, правила, озвучку, опрос, экспорт таблиц картинкой.
+  В разделе «Ученики и группы» создаёт группы и учеников, после занятия открывает урок
+  группе и видит прогресс: кто тренировался, сколько слов выучено, трудные слова группы.
+- **Ученик** видит только открытые ему уроки: слова, правила, что делали на занятии, ДЗ,
+  и четыре тренировки (карточки, выбор перевода, написание, диктант). Слова повторяются
+  по интервалам 1–3–7–14–30 дней (раздел «Повторение»).
 
-## Выкладка на сервер (один раз)
+## Устройство
+
+- `index.html`, `css/`, `js/`, `data/` — сама программа (данные курса в `data/*.js`).
+- `server/app.py` — Flask: вход, группы, прогресс; отдаёт файлы сайта только после входа.
+  База SQLite лежит вне сайта: `/home/planner/ziyoda-data/ziyoda.db`, копия каждую ночь
+  в `/home/planner/backups/ziyoda-ДАТА.db` (хранится 14 дней).
+- `deploy/` — настройка сервера: nginx, служба systemd, автообновление.
+
+## Первая настройка сервера (один раз)
 
 ```sh
-sudo git clone https://github.com/AlimMunavarov-04/ziyoda.munavarov-.git /var/www/ziyoda
-sudo chown -R planner:planner /var/www/ziyoda
-sudo cp /var/www/ziyoda/deploy/nginx-ziyoda.conf /etc/nginx/sites-available/ziyoda
-sudo ln -sf /etc/nginx/sites-available/ziyoda /etc/nginx/sites-enabled/ziyoda
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d ziyoda.munavarovbi.com
-# автообновление раз в минуту:
-(crontab -l 2>/dev/null; echo "* * * * * sh /var/www/ziyoda/deploy/update.sh") | crontab -
+sudo sh /var/www/ziyoda/deploy/setup.sh <логин_учителя>
 ```
 
-После этого любой push в `main` появляется на сайте в течение минуты.
+Скрипт ставит Python-окружение, запускает службу `ziyoda` (порт 8097), переключает nginx
+на неё, включает автообновление и ночные копии базы и создаёт учителя (спросит пароль).
+
+Ещё один учитель или новый пароль учителя:
+
+```sh
+cd /var/www/ziyoda/server && sudo -u planner ZIYODA_DATA=/home/planner/ziyoda-data ../.venv/bin/python manage.py teacher <логин>
+```
+
+## Обновления
+
+Push в `main` → сервер раз в минуту забирает изменения (`deploy/update.sh`) и мягко
+перезапускает программу. Изменения в `deploy/nginx-ziyoda.conf` или `deploy/ziyoda.service`
+сами не применяются — для них снова запускается `setup.sh`.
+
+## Локально
+
+Двойной щелчок по `index.html` открывает программу учителя без кабинетов.
+С кабинетами: `ZIYODA_DEV=1 python server/app.py` → http://127.0.0.1:8097.
