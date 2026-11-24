@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Menschen A1.1 — уроки</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><div class="brand-mark">A1</div><div><b>Menschen A1.1</b><small>программа уроков для учителя</small></div></div>
+      <nav id="nav"></nav>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <button class="btn menu-btn" id="btn-menu">☰ Занятия</button>
+        <div class="timer" id="timer"></div>
+        <span class="spacer"></span>
+        <button class="btn" id="btn-slow" title="Медленная озвучка">🐢 Медленно</button>
+        <button class="btn" id="btn-big" title="Крупный шрифт для показа экрана">🔍 Крупно</button>
+        <button class="btn" id="btn-print" title="Распечатать / сохранить PDF">🖨</button>
+      </div>
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+  <div class="modal" id="modal" hidden></div>
+
+  <script src="data/_init.js"></script>
+  <script src="data/rules.js"></script>
+  <script src="data/m1.js"></script>
+  <script src="data/m2.js"></script>
+  <script src="data/m3.js"></script>
+  <script src="data/m4.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
