@@ -308,6 +308,7 @@
         '<span class="right"><button class="btn sm" data-timer="' + st.min + '" data-timer-name="' + esc(st.ref) + '">▶ Таймер</button>' +
         '<label class="check"><input type="checkbox" data-done-step="' + st.id + '" ' + (done[st.id] ? "checked" : "") + "> Готово</label></span></div>" +
         '<p class="task">' + esc(st.task) + "</p>" + (st.how ? '<p class="how"><b>Как вести:</b> ' + esc(st.how) + "</p>" : "") +
+        (online() ? '<div class="ex-slot" data-ex-slot="' + esc(exKey(s.num, st.ref)) + '"></div>' : "") +
         wordTable("Занятие " + s.num + " · " + st.ref, lessonLabel(s) + " · " + s.title, st.newWords) +
         (st.repeats.length ? '<div class="repeat-note">Уже изучали раньше (не повторяем): ' + st.repeats.map(function (r) { return esc(r.w.de) + " — зан. " + r.from.session; }).join(", ") + "</div>" : "") +
         (st.rule ? ruleBlock(st.rule) : "") + "</div>";
@@ -527,6 +528,11 @@
         wordTable("Занятие " + s.num + " · слова", lessonLabel(s) + " · " + s.title, s.words, { label: "Слов", stats: true }) + "</div>";
     }
     if (rules.length) h += '<div class="part-head"><h2>Правила</h2></div><div class="card">' + rules.map(ruleBlock).join("") + "</div>";
+    h += '<div id="ex-part" hidden><div class="part-head"><h2>Упражнения</h2><span class="muted small">впишите ответы в ячейки и нажмите «Проверить»</span></div>' +
+      s.steps.map(function (st) {
+        return '<div class="card ex-card" data-ex-card="' + esc(exKey(s.num, st.ref)) + '" hidden><div class="step-head"><span class="ref">' + esc(st.ref) + "</span></div>" +
+          '<p class="task">' + esc(st.task) + '</p><div class="ex-slot" data-ex-slot="' + esc(exKey(s.num, st.ref)) + '"></div></div>';
+      }).join("") + "</div>";
     h += '<div class="part-head"><h2>Что делали на занятии</h2></div><div class="card"><ul class="hw-list">' +
       s.steps.map(function (st) { return "<li><b>" + esc(st.ref) + "</b> — " + esc(st.task) + "</li>"; }).join("") + "</ul></div>";
     if (s.home.length) h += '<div class="part-head"><h2>Домашнее задание</h2></div><div class="card"><ul class="hw-list">' +
@@ -710,11 +716,12 @@
     }
     h += '<div class="part-head"><h2>Ученики</h2></div><div class="card">';
     if (r.students.length) {
-      h += '<div class="wt-scroll"><table class="wt"><thead><tr><th>Ученик</th><th>Логин</th><th>Тренировался</th><th>Выучено слов</th><th>Точность</th><th>За неделю</th><th></th></tr></thead><tbody>' +
+      h += '<div class="wt-scroll"><table class="wt"><thead><tr><th>Ученик</th><th>Логин</th><th>Тренировался</th><th>Выучено слов</th><th>Точность</th><th>За неделю</th><th>Упражнения</th><th></th></tr></thead><tbody>' +
         r.students.map(function (s) {
           var tot = s.right + s.wrong, acc = tot ? Math.round(s.right / tot * 100) + "%" : "—";
           return "<tr><td><b>" + esc(s.name || "—") + "</b></td><td>" + esc(s.login) + "</td><td>" + fmtAgo(s.last_practice) + "</td><td>" + s.strong + " из " + s.words +
-            "</td><td>" + acc + "</td><td>" + s.week_sessions + " трен. · " + s.week_answers + ' отв.</td><td class="row-actions">' +
+            "</td><td>" + acc + "</td><td>" + s.week_sessions + " трен. · " + s.week_answers + " отв.</td><td>" +
+            (s.ex_done ? s.ex_done + " шт. · " + Math.round(s.ex_correct / Math.max(s.ex_total, 1) * 100) + "%" : "—") + '</td><td class="row-actions">' +
             '<button class="btn sm" data-reset="' + s.id + '" title="Выдать новый пароль">🔑 Новый пароль</button>' +
             '<button class="btn sm danger" data-del-student="' + s.id + '" data-name="' + esc(s.name || s.login) + '">Удалить</button></td></tr>';
         }).join("") + "</tbody></table></div>";
@@ -736,6 +743,112 @@
     var grp = GROUPS.filter(function (g) { return g.id === gid; })[0];
     if (!r.students.length && grp) h += '<div class="nav-foot"><span></span><button class="btn sm danger" data-del-group="' + gid + '">Удалить группу «' + esc(grp.name) + "»</button></div>";
     return h;
+  }
+
+  // ---------------------------------------------------------------- упражнения (ячейки как в книге)
+  var EXD = { num: 0, exercises: {}, results: {} };
+  var exEdit = null;   // открыт редактор: {key, num, ref}
+  function exKey(num, ref) { return num + "|" + ref; }
+  function loadExercises(num) {
+    if (!online() || !window.EX) return;
+    api("GET", "/api/exercises?session=" + num).then(function (d) {
+      EXD = { num: num, exercises: d.exercises || {}, results: d.results || {} };
+      fillExercises();
+    }).catch(fail);
+  }
+  function fillExercises() {
+    var any = false;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-ex-slot]"), function (slot) {
+      var key = slot.dataset.exSlot, body = EXD.exercises[key];
+      if (isStudent()) {
+        var card = slot.closest("[data-ex-card]");
+        slot.innerHTML = body ? EX.render(body, key, { student: true, last: EXD.results[key] }) : "";
+        if (card) card.hidden = !body;
+        if (body) any = true;
+      } else {
+        slot.innerHTML = (body ? '<div class="ex-wrap">' + EX.render(body, key) + "</div>" : "") +
+          '<button type="button" class="btn sm" data-ex-edit="' + esc(key) + '">' + (body ? "✏️ Изменить упражнение" : "✏️ Внести упражнение с ячейками") + "</button>";
+      }
+    });
+    var part = $("#ex-part"); if (part) part.hidden = !any;
+  }
+
+  var EX_HELP = '<details class="ex-syntax"><summary>Как размечать</summary><ul class="hw-list small">' +
+    "<li><code>[ответ]</code> — ячейка для ввода. Несколько верных ответов: <code>[heiße/heisse]</code></li>" +
+    "<li><code>{bin|*bist|ist}</code> — выбор из списка, <code>*</code> — правильный</li>" +
+    "<li><code>Слова: eins | zwei | drei</code> — рамка со словами</li>" +
+    "<li><code>Hallo = Tschüs</code> — соединить пары (каждая пара с новой строки)</li>" +
+    "<li><code># первая строка</code> — расставить по порядку (пишите в правильном порядке)</li>" +
+    "<li><code>## a</code> — подзаголовок; пустая строка — отступ</li></ul></details>";
+
+  function openExEditor(key) {
+    var i = key.indexOf("|"), num = +key.slice(0, i), ref = key.slice(i + 1);
+    exEdit = { key: key, num: num, ref: ref };
+    var m = $("#modal");
+    m.hidden = false;
+    m.innerHTML = '<div class="modal-box ex-editor"><div class="ex-ed-head"><b>✏️ Занятие ' + num + " · " + esc(ref) + '</b><span class="right"><button type="button" class="btn sm" data-ex-close="1">Закрыть</button></span></div>' +
+      '<div class="ex-ed-grid"><div class="ex-book" id="ex-book"></div>' +
+      '<div class="ex-ed-main"><label class="field">Текст упражнения<textarea id="ex-text" rows="10" spellcheck="false" placeholder="Например:\nIch [heiße] Anna. Du {bin|*bist|ist} Max.">' + esc(EXD.exercises[key] || "") + "</textarea></label>" +
+      EX_HELP + '<div class="muted small" style="margin:10px 0 4px">Так увидит ученик:</div><div class="ex-preview" id="ex-preview"></div>' +
+      '<div class="quiz-actions" style="justify-content:flex-end"><button type="button" class="btn danger" data-ex-del="1"' + (EXD.exercises[key] ? "" : " hidden") + '>Удалить</button>' +
+      '<button type="button" class="btn primary" data-ex-save="1">Сохранить</button></div></div></div></div>';
+    exPreview();
+    renderBook();
+    $("#ex-text").focus();
+  }
+  function exPreview() {
+    var t = $("#ex-text"), p = $("#ex-preview"); if (!t || !p) return;
+    p.innerHTML = EX.render(t.value, exEdit.key) || '<span class="muted small">Пока пусто.</span>';
+  }
+  function bookSrc(url) { return url + "#page=" + (EX.bookPage(exEdit.ref) + EX.offset()) + "&view=FitH"; }
+  function renderBook() {
+    var box = $("#ex-book"); if (!box || !exEdit) return;
+    EX.getBook().then(function (url) {
+      if (!exEdit) return;
+      var ctl = '<div class="ex-book-bar"><label class="btn sm">📖 ' + (url ? "Другой файл" : "Открыть книгу (PDF)") + '<input type="file" accept="application/pdf,.pdf" data-ex-book="1" hidden></label>' +
+        (url ? '<label class="small muted">Сдвиг страниц <input type="number" class="ex-off" data-ex-off="1" value="' + EX.offset() + '" min="-20" max="40"></label>' +
+          '<button type="button" class="btn sm" data-ex-forget="1" title="Убрать книгу из этого браузера">✕</button>' : "") + "</div>";
+      box.innerHTML = ctl + (url
+        ? '<iframe class="ex-pdf" title="Книга" src="' + esc(bookSrc(url)) + '"></iframe><div class="muted small">AB S. ' + EX.bookPage(exEdit.ref) +
+          ". Если открылась не та страница — поменяйте «Сдвиг».</div>"
+        : '<div class="ex-book-empty muted small">Выберите PDF рабочей тетради со своего компьютера. Файл остаётся только в этом браузере и на сервер не загружается. ' +
+          "Дальше книга будет сама открываться на странице упражнения.</div>");
+    });
+  }
+  function closeExEditor() {
+    var t = $("#ex-text");
+    if (t && exEdit && t.value !== (EXD.exercises[exEdit.key] || "") && !confirm("Закрыть без сохранения?")) return;
+    exEdit = null; $("#modal").hidden = true; $("#modal").innerHTML = "";
+  }
+  function saveExercise(body) {
+    var e = exEdit;
+    api("POST", "/api/exercises", { ref: e.key, session: e.num, body: body }).then(function () {
+      if (body.trim()) EXD.exercises[e.key] = body; else delete EXD.exercises[e.key];
+      exEdit = null; $("#modal").hidden = true; $("#modal").innerHTML = "";
+      toast(body.trim() ? "Упражнение сохранено" : "Упражнение удалено");
+      fillExercises();
+    }).catch(fail);
+  }
+  // клики по упражнениям; true — обработан
+  function exClick(t) {
+    var d = t.dataset, box = t.closest(".ex");
+    if (d.exCheck && box) {
+      var r = EX.check(box);
+      if (isStudent() && !box.closest(".modal")) {
+        api("POST", "/api/exercise-result", { ref: box.dataset.ex, total: r.total, correct: r.correct }).then(function () {
+          EXD.results[box.dataset.ex] = { t: r.total, c: r.correct };
+        }).catch(fail);
+      }
+      return true;
+    }
+    if (d.exShow && box) { EX.show(box); return true; }
+    if (d.exReset && box) { EX.reset(box); return true; }
+    if (d.exEdit) { openExEditor(d.exEdit); return true; }
+    if (d.exClose) { closeExEditor(); return true; }
+    if (d.exSave) { saveExercise($("#ex-text").value); return true; }
+    if (d.exDel) { if (confirm("Удалить упражнение с сайта?")) saveExercise(""); return true; }
+    if (d.exForget) { EX.forgetBook().then(renderBook); return true; }
+    return false;
   }
 
   function accountModal() {
@@ -806,6 +919,7 @@
     var on = $("#nav .nav a.on"); if (on) on.scrollIntoView({ block: "nearest" });
     if (keepScroll !== true) window.scrollTo(0, 0);
     if (active === "class") loadClass();
+    if (typeof active === "number" && (!isStudent() || (ME.opened || []).indexOf(active) >= 0)) loadExercises(active);
   }
 
   function insertAtCursor(inp, ch) {
@@ -900,12 +1014,14 @@
 
   document.addEventListener("click", function (e) {
     var t = e.target.closest("[data-say],[data-act],[data-q],[data-timer],[data-tm],[data-jump],[data-quiz-session],[data-copy-home],#btn-slow,#btn-big,#btn-menu,#btn-print," +
-      "[data-help-jump],[data-tr],[data-pick],[data-uml],[data-train],[data-review],[data-acc],[data-open-group],[data-reset],[data-del-student],[data-del-group],[data-copy-creds],[data-hide-creds]");
+      "[data-help-jump],[data-tr],[data-pick],[data-uml],[data-train],[data-review],[data-acc],[data-open-group],[data-reset],[data-del-student],[data-del-group],[data-copy-creds],[data-hide-creds]," +
+      "[data-ex-check],[data-ex-show],[data-ex-reset],[data-ex-edit],[data-ex-close],[data-ex-save],[data-ex-del],[data-ex-forget]");
     if (!t) {
-      if (e.target.id === "modal" && !tr) { quiz = null; renderQuiz(); }
+      if (e.target.id === "modal" && !tr && !exEdit) { quiz = null; renderQuiz(); }
       return;
     }
     if (t.dataset.say) return speak(t.dataset.say);
+    if (exClick(t)) return;
     if (cabinetClick(t)) return;
     if (t.dataset.act) return tableAction(t.dataset.act, t.closest("[data-table]").dataset.table);
     if (t.dataset.q) return quizAction(t.dataset.q);
@@ -939,9 +1055,16 @@
       save("done", done); $("#nav").innerHTML = sideNav(+t.dataset.doneSession);
     }
     if (t.id === "wm") { wordFilter.mod = t.value; rerenderWords(); }
+    if (t.dataset.exBook && t.files && t.files[0]) {
+      var f = t.files[0];
+      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { toast("Нужен файл PDF"); return; }
+      EX.setBook(f).then(renderBook);
+    }
+    if (t.dataset.exOff) { EX.setOffset(parseInt(t.value, 10) || 0); renderBook(); }
   });
   document.addEventListener("input", function (e) {
     if (e.target.id === "wq") { wordFilter.q = e.target.value; rerenderWords(); }
+    if (e.target.id === "ex-text") exPreview();
   });
   function rerenderWords() {
     tableSeq = 0; TABLES = {};
@@ -949,6 +1072,7 @@
     $("#wlist").innerHTML = wordTable("Слова · " + (wordFilter.mod === "all" ? "весь курс" : "Модуль " + wordFilter.mod), "Menschen A1.1", list, { src: true, label: "Слов" }) || '<span class="muted">Ничего не найдено</span>';
   }
   document.addEventListener("keydown", function (e) {
+    if (exEdit) { if (e.key === "Escape") closeExEditor(); return; }
     if (tr) {
       if (e.key === "Escape") return trainerAction("close");
       if (tr.i >= tr.deck.length) return;

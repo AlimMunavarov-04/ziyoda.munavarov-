@@ -245,3 +245,47 @@ table.wt td.src { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
   .side, .topbar, .wt-bar, .step-head .right, .btn { display: none !important; }
   .app { display: block; } .main { padding: 0; } .card { box-shadow: none; break-inside: avoid; }
 }
+
+/* ---------------------------------------------------------------- упражнения: ячейки как в книге */
+.ex-slot { margin: 10px 0; }
+.ex-wrap { margin-bottom: 8px; }
+.ex { line-height: 2.3; }
+.ex-line { margin: 2px 0; }
+.ex-h { font-weight: 700; margin-top: 8px; }
+.ex-br { height: 8px; }
+.ex-bank { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border: 1.5px dashed var(--line); border-radius: 12px; margin: 4px 0 10px; line-height: 1.4; }
+.ex-bank span { background: var(--surface-2); border-radius: 8px; padding: 2px 9px; }
+.ex-gap { font: inherit; font-size: 16px; border: 0; border-bottom: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); border-radius: 6px 6px 0 0; padding: 1px 6px; margin: 0 3px; min-width: 4ch; max-width: 100%; text-align: center; }
+.ex-gap:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ex-sel { font-size: 16px; padding: 3px 8px; margin: 0 3px; border-color: var(--accent); }
+.ex-gap.ok, .ex-sel.ok { background: var(--ok-soft); border-color: var(--ok); }
+.ex-gap.bad, .ex-sel.bad { background: var(--warn-soft); border-color: var(--die); }
+.ex-match, .ex-order { display: grid; gap: 6px; margin: 6px 0; line-height: 1.4; }
+.ex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ex-left { min-width: 9em; font-weight: 600; }
+.ex-arrow { color: var(--ink-3); }
+.ex-num { min-width: 4.2em; }
+.ex-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; line-height: 1.4; }
+.ex-score { font-weight: 600; color: var(--ink-2); }
+.ex-card .task { margin: 4px 0 0; }
+
+.modal-box.ex-editor { width: min(1200px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 16px 18px; }
+.ex-ed-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ex-ed-head .right { margin-left: auto; }
+.ex-ed-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.ex-book { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ex-book-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ex-off { width: 4.5em; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; background: var(--surface); color: var(--ink); }
+.ex-pdf { width: 100%; height: min(72vh, 900px); border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.ex-book-empty { border: 1.5px dashed var(--line); border-radius: 12px; padding: 18px; line-height: 1.5; }
+.ex-editor textarea { width: 100%; font: 15px/1.5 ui-monospace, Consolas, monospace; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--surface); color: var(--ink); resize: vertical; }
+.ex-syntax { margin-top: 6px; font-size: 13.5px; }
+.ex-syntax summary { cursor: pointer; color: var(--accent); }
+.ex-syntax code { background: var(--surface-2); border-radius: 5px; padding: 0 4px; }
+.ex-preview { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--bg); }
+@media (max-width: 900px) {
+  .ex-ed-grid { grid-template-columns: 1fr; }
+  .ex-pdf { height: 55vh; }
+  .ex-left { min-width: 0; }
+}
+@media print { .ex-actions, [data-ex-edit] { display: none !important; } }

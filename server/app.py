@@ -53,6 +53,16 @@ CREATE TABLE IF NOT EXISTS activity (
   session_num INTEGER, kind TEXT NOT NULL, total INTEGER NOT NULL, correct INTEGER NOT NULL, at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS login_fail (key TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS exercises (
+  ref TEXT PRIMARY KEY, session_num INTEGER NOT NULL, body TEXT NOT NULL,
+  updated_at INTEGER NOT NULL, updated_by INTEGER
+);
+CREATE TABLE IF NOT EXISTS ex_results (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ref TEXT NOT NULL, total INTEGER NOT NULL, correct INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 1, at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, ref)
+);
+CREATE INDEX IF NOT EXISTS ix_exercises_session ON exercises(session_num);
 CREATE INDEX IF NOT EXISTS ix_activity_user ON activity(user_id, at);
 CREATE INDEX IF NOT EXISTS ix_login_fail ON login_fail(key, at);
 """
@@ -282,6 +292,75 @@ def api_practice():
     return jsonify(ok=True)
 
 
+# ------------------------------------------------------------------ exercises
+# Текст упражнения вносит учитель (разметка: [ответ] — ячейка, {a|*b|c} — выбор, …).
+REF_RE = re.compile(r"^\d{1,3}\|.{1,80}$")
+MAX_BODY = 20000
+
+
+@app.get("/api/exercises")
+@login_required()
+def api_exercises():
+    try:
+        num = int(request.args.get("session", ""))
+    except ValueError:
+        return jsonify(error="Неверный номер занятия"), 400
+    u = current_user()
+    con = db()
+    if u["role"] == "student" and num not in opened_sessions(u["group_id"]):
+        return jsonify(error="Урок ещё не открыт"), 403
+    out = {r["ref"]: r["body"] for r in con.execute("SELECT ref, body FROM exercises WHERE session_num = ?", (num,))}
+    res = {}
+    if u["role"] == "student":
+        res = {r["ref"]: {"t": r["total"], "c": r["correct"], "n": r["tries"]}
+               for r in con.execute("SELECT * FROM ex_results WHERE user_id = ? AND ref IN (SELECT ref FROM exercises WHERE session_num = ?)", (u["id"], num))}
+    return jsonify(exercises=out, results=res)
+
+
+@app.post("/api/exercises")
+@login_required("teacher")
+def api_exercise_save():
+    b = body()
+    ref = str(b.get("ref", ""))
+    num = b.get("session")
+    text = str(b.get("body", ""))
+    if not REF_RE.match(ref) or not isinstance(num, int) or not ref.startswith(str(num) + "|"):
+        return jsonify(error="Неверное упражнение"), 400
+    if len(text) > MAX_BODY:
+        return jsonify(error="Слишком длинный текст"), 400
+    con = db()
+    if text.strip():
+        con.execute("""INSERT INTO exercises(ref, session_num, body, updated_at, updated_by) VALUES (?,?,?,?,?)
+                       ON CONFLICT(ref) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at, updated_by = excluded.updated_by""",
+                    (ref, num, text, now(), current_user()["id"]))
+    else:
+        con.execute("DELETE FROM exercises WHERE ref = ?", (ref,))
+    con.commit()
+    return jsonify(ok=True)
+
+
+@app.post("/api/exercise-result")
+@login_required("student")
+def api_exercise_result():
+    b = body()
+    ref = str(b.get("ref", ""))
+    total, correct = b.get("total"), b.get("correct")
+    if not REF_RE.match(ref) or not isinstance(total, int) or not isinstance(correct, int) or not 0 <= correct <= total <= 500:
+        return jsonify(error="Неверные данные"), 400
+    u = current_user()
+    con = db()
+    num = int(ref.split("|", 1)[0])
+    if num not in opened_sessions(u["group_id"]):
+        return jsonify(error="Урок ещё не открыт"), 403
+    con.execute("""INSERT INTO ex_results(user_id, ref, total, correct, tries, at) VALUES (?,?,?,?,1,?)
+                   ON CONFLICT(user_id, ref) DO UPDATE SET total = excluded.total, correct = excluded.correct,
+                   tries = tries + 1, at = excluded.at""", (u["id"], ref, total, correct, now()))
+    con.execute("INSERT INTO activity(user_id, session_num, kind, total, correct, at) VALUES (?,?,?,?,?,?)",
+                (u["id"], num, "exercise", total, correct, now()))
+    con.commit()
+    return jsonify(ok=True)
+
+
 # ------------------------------------------------------------------ teacher
 def clean_login(s):
     return str(s or "").strip().lower()
@@ -351,12 +430,14 @@ def api_group_report(gid):
         st = con.execute(
             "SELECT COUNT(*) AS words, COALESCE(SUM(box >= 3),0) AS strong, COALESCE(SUM(right_n),0) AS r, COALESCE(SUM(wrong_n),0) AS w FROM word_stats WHERE user_id = ?",
             (s["id"],)).fetchone()
-        wk = con.execute("SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM activity WHERE user_id = ? AND at > ?", (s["id"], week)).fetchone()
+        wk = con.execute("SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS total FROM activity WHERE user_id = ? AND at > ? AND kind != 'exercise'", (s["id"], week)).fetchone()
         last = con.execute("SELECT MAX(at) FROM activity WHERE user_id = ?", (s["id"],)).fetchone()[0]
+        ex = con.execute("SELECT COUNT(*) AS n, COALESCE(SUM(correct),0) AS c, COALESCE(SUM(total),0) AS t FROM ex_results WHERE user_id = ?", (s["id"],)).fetchone()
         students.append({
             "id": s["id"], "login": s["login"], "name": s["name"], "last_seen": s["last_seen"], "last_practice": last,
             "words": st["words"], "strong": st["strong"], "right": st["r"], "wrong": st["w"],
             "week_sessions": wk["n"], "week_answers": wk["total"],
+            "ex_done": ex["n"], "ex_correct": ex["c"], "ex_total": ex["t"],
         })
     hard = [dict(r) for r in con.execute(
         """SELECT word_key AS k, SUM(wrong_n) AS wrong, SUM(right_n) AS right FROM word_stats
